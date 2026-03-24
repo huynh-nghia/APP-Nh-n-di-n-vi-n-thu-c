@@ -51,6 +51,8 @@ myenv/
 
 ### (Lưu ý) nhớ tạo môi trường ảo trên máy mình python -m venv myenv (linux)
 
+### link data:https://www.kaggle.com/datasets/trumedicines/1k-pharmaceutical-pill-image-dataset (nhớ để folder data không để bên trong myenv)
+
 ### Kích hoạt môi trường source myenv/bin/activate (linux)
 
 ### Cách 1: Dùng script (khuyên dùng)
