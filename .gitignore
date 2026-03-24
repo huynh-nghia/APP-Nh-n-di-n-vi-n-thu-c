@@ -1,0 +1,36 @@
+# Bỏ qua môi trường ảo
+venv/
+
+env/
+
+# Bỏ qua các file rác của Python
+__pycache__/
+*.pyc
+
+# Bỏ qua thư mục chứa ảnh/dataset (vì nó quá nặng)
+dataset/
+images/
+data/
+Thuoc_Goc/
+Du_Lieu_Da_Chia/
+
+# Bỏ qua các file model AI nặng (nếu có)
+*.pt
+*.h5
+*.weights
+*.pkl
+# Bỏ qua thư viện
+lib/
+# Bỏ qua file log
+logs/
+# Bỏ qua file cấu hình cá nhân (nếu có)
+config.ini
+
+.env/
+.env.example/
+# Bỏ qua file tạm
+bin/
+lib/
+lib64/
+include/
+pyvenv.cfg/
