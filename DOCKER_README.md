@@ -75,7 +75,13 @@
 docker --version
 
 # Nếu chưa cài, tải từ: https://docs.docker.com/get-docker/
+Tải script cài đặt về máy:
+curl -fsSL https://get.docker.com -o get-docker.sh
+Chạy script để cài đặt:
+sudo sh get-docker.sh
+
 ```
+
 
 ### Bước 2: Build images (lần đầu)
 
