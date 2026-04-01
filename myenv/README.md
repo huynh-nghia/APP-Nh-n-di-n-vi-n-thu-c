@@ -114,8 +114,13 @@ BACKEND_HOST=127.0.0.1
 BACKEND_PORT=8000
 ML_CLASSIFIER_MODEL_PATH=models/ml_classifier.pkl
 MAX_FILE_SIZE_MB=5
+CORS_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
+RATE_LIMIT_REQUESTS_PER_MINUTE=60
+TRUST_X_FORWARDED_FOR=false
 ENVIRONMENT=development
 ```
+
+> ⚠️ **Quan trọng:** Không dùng API key mặc định/yếu. Hãy đặt chuỗi bí mật đủ mạnh.
 
 ### Bước 3: Chuẩn bị ảnh
 
@@ -178,12 +183,16 @@ python -m src.train
 GET /health
 ```
 
+Nếu service chưa sẵn sàng (thiếu model hoặc lỗi startup), `/health` sẽ trả `503` với chi tiết `startup_error`.
+
 ### Nhận diện ảnh
 ```
 POST /predict
 Header: X-API-Key: your-api-key
 Body: file ảnh (JPEG/PNG, max 5MB)
 ```
+
+`/predict` có rate-limit theo IP (mặc định 60 req/phút, cấu hình bằng `RATE_LIMIT_REQUESTS_PER_MINUTE`).
 
 Response:
 ```json
@@ -204,22 +213,51 @@ Response:
 ## 🎨 Giao diện web có gì?
 
 ### Tab 1: Nhận diện ảnh
-- Upload ảnh
-- Xem kết quả
-- Xem độ tin cậy
+- Upload ảnh đơn lẻ hoặc nhiều ảnh cùng lúc (Batch Prediction)
+- Xem kết quả với biểu đồ Gauge Chart (độ tin cậy)
+- Xem Top 5 loại thuốc có xác suất cao nhất (Horizontal Bar Chart)
+- Lưu kết quả vào storage
+- Xuất kết quả: ảnh đã nhận diện, JSON, CSV, ZIP
 
 ### Tab 2: Train model
-- Cấu hình train
+- Cấu hình train (classifier, feature extractor, epochs)
 - Theo dõi tiến trình
-- Xem kết quả
+- Xem kết quả training
 
 ### Tab 3: Trực quan hóa
-- Xem phân bố dữ liệu
-- Quản lý tên thuốc
-- Xem ảnh mẫu
+- Xem phân bố dữ liệu (Donut Chart, Bar Chart)
+- Phân tích mất cân bằng dữ liệu (Class Imbalance)
+- Heatmap phân bố dữ liệu (Class × Split)
+- Thông số training (Accuracy, F1-Score, Radar Chart)
+- Xem ảnh mẫu với metadata chi tiết
 
-### Tab 4: Hướng dẫn
-- Hướng dẫn sử dụng
+### Tab 4: Data Augmentation
+- Tạo ảnh augmentation từ ảnh gốc
+- 8 loại augmentation: rotate, flip, brightness, contrast, blur, noise, zoom
+- Preview ảnh đã tạo
+- Xuất ZIP tất cả ảnh augmentation
+
+### Tab 5: Lịch sử dự đoán
+- Xem lại các dự đoán đã thực hiện
+- Lọc theo ngày và loại thuốc
+- Biểu đồ xu hướng dự đoán theo ngày
+- Thống kê tổng hợp
+
+### Tab 6: Phát hiện chất lượng ảnh
+- Đánh giá chất lượng ảnh trước khi nhận diện
+- 5 chỉ số: độ mờ, độ sáng, độ tương phản, noise, kích thước
+- Điểm tổng hợp 0-100 với đánh giá màu sắc
+- Khuyến nghị cải thiện chất lượng
+
+### Tab 7: Xuất báo cáo PDF
+- Tạo báo cáo PDF chuyên nghiệp
+- Bao gồm: tổng quan, bảng chi tiết, biểu đồ
+- Cấu hình tiêu đề và số dòng tối đa
+- Tải PDF trực tiếp
+
+### Tab 8: Hướng dẫn
+- Hướng dẫn sử dụng chi tiết
+- Các tính năng nâng cao
 
 ## 🔧 Cấu hình
 
@@ -236,6 +274,14 @@ Log được ghi vào:
 - `logs/app.log` - Hoạt động thông thường
 - `logs/error.log` - Lỗi
 - `logs/security.log` - Bảo mật
+
+## 🗄️ Lưu trữ lịch sử dự đoán
+
+Lịch sử dự đoán trong UI hiện được lưu bằng **SQLite** tại:
+
+- `data/predictions.db`
+
+Ưu điểm so với JSON: an toàn hơn khi nhiều request đồng thời, dễ mở rộng và truy vấn thống kê.
 
 ## 🐛 Lỗi thường gặp
 

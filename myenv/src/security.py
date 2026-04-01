@@ -12,6 +12,7 @@ Tại sao cần bảo mật?
     - Cần giới hạn kích thước file
 """
 
+import hmac
 import os
 import magic
 from pathlib import Path
@@ -53,10 +54,25 @@ def kiem_tra_api_key(api_key: str, expected_key: str = None) -> bool:
         HTTPException: Nếu API Key không hợp lệ (401)
     """
     if expected_key is None:
-        expected_key = os.getenv("API_KEY", "default-api-key-change-me")
+        expected_key = os.getenv("API_KEY")
 
-    if not api_key or api_key != expected_key:
-        ghi_bao_mat(f"API Key không hợp lệ: {api_key[:10] if api_key else 'None'}...")
+    if not expected_key:
+        ghi_loi("API_KEY chưa được cấu hình trên server")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server chưa được cấu hình API Key",
+        )
+
+    if not api_key:
+        ghi_bao_mat("Thiếu API Key trong request")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key không hợp lệ",
+        )
+
+    # So sánh constant-time để giảm nguy cơ timing attack
+    if not hmac.compare_digest(api_key.strip(), expected_key.strip()):
+        ghi_bao_mat(f"API Key không hợp lệ: {api_key[:10]}...")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API Key không hợp lệ",

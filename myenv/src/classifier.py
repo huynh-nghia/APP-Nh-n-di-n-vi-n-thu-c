@@ -33,7 +33,6 @@ class PillClassifier:
         - SVM: Chính xác, phù hợp với dữ liệu ít
         - Random Forest: Nhanh, ít bị overfitting
     """
-
     def __init__(self, loai: str = "svm", so_vong: int = None):
         """
         Khởi tạo Classifier.

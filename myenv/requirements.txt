@@ -29,6 +29,13 @@ python-magic>=0.4.27             # Kiểm tra MIME type file
 streamlit>=1.28.0                # Tạo giao diện web
 requests>=2.31.0                 # Gọi HTTP API
 
+# --- Biểu đồ & Visualization ---
+plotly>=5.18.0                   # Tạo biểu đồ tương tác
+kaleido>=0.2.1                   # Xuất ảnh từ Plotly (optional)
+
+# --- Xuất PDF ---
+reportlab>=4.0.0                 # Tạo file PDF
+
 # --- Bảo mật ---
 pydantic>=2.4.0                  # Validate dữ liệu
 pydantic-settings>=2.0.0         # Cấu hình từ environment
