@@ -17,6 +17,8 @@ Cách sử dụng:
 import logging
 import logging.handlers
 import json
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -48,6 +50,37 @@ class DinhDangJSON(logging.Formatter):
         return json.dumps(log_data)
 
 
+def lay_duong_dan_log_mac_dinh() -> Path:
+    """Trả về thư mục log ưu tiên từ env hoặc thư mục logs trong myenv/."""
+    log_dir = os.getenv("LOG_DIR", "").strip()
+    if log_dir:
+        return Path(log_dir)
+
+    return Path(__file__).resolve().parent.parent / "logs"
+
+
+def dam_bao_thu_muc_log_co_the_ghi(thu_muc_log: Path) -> Path:
+    """Đảm bảo có 1 thư mục log writable; fallback sang /tmp nếu cần."""
+    cac_thu_muc_ung_vien = [
+        thu_muc_log,
+        Path(tempfile.gettempdir()) / "pill-recognition-logs",
+    ]
+
+    for thu_muc in cac_thu_muc_ung_vien:
+        try:
+            thu_muc.mkdir(parents=True, exist_ok=True)
+            file_thu = thu_muc / ".write_test"
+            file_thu.write_text("ok", encoding="utf-8")
+            file_thu.unlink(missing_ok=True)
+            return thu_muc
+        except OSError:
+            continue
+
+    raise PermissionError(
+        f"Không có thư mục log nào có thể ghi được. Đã thử: {', '.join(str(p) for p in cac_thu_muc_ung_vien)}"
+    )
+
+
 def tao_logger(ten: str, file_log: str, muc=logging.INFO):
     """
     Tạo một logger mới.
@@ -60,12 +93,15 @@ def tao_logger(ten: str, file_log: str, muc=logging.INFO):
     Returns:
         Logger đã cấu hình
     """
-    # Tạo thư mục chứa file log nếu chưa có
-    Path(file_log).parent.mkdir(parents=True, exist_ok=True)
+    # Xác định thư mục log có thể ghi được
+    ten_file_log = Path(file_log).name
+    thu_muc_log = dam_bao_thu_muc_log_co_the_ghi(lay_duong_dan_log_mac_dinh())
+    duong_dan_log = thu_muc_log / ten_file_log
 
     # Tạo logger
     logger = logging.getLogger(ten)
     logger.setLevel(muc)
+    logger.propagate = False
 
     # Xóa handler cũ (tránh ghi trùng)
     logger.handlers.clear()
@@ -73,19 +109,26 @@ def tao_logger(ten: str, file_log: str, muc=logging.INFO):
     # Handler: Ghi file với rotation
     # - Tối đa 5MB mỗi file
     # - Giữ lại 5 file backup
-    handler = logging.handlers.RotatingFileHandler(
-        file_log,
-        maxBytes=5 * 1024 * 1024,  # 5MB
-        backupCount=5
-    )
-    handler.setLevel(muc)
-
     # Formatter: Định dạng JSON
     formatter = DinhDangJSON()
+
+    handler = logging.handlers.RotatingFileHandler(
+        duong_dan_log,
+        maxBytes=5 * 1024 * 1024,  # 5MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    handler.setLevel(muc)
     handler.setFormatter(formatter)
 
     # Thêm handler vào logger
     logger.addHandler(handler)
+
+    # Đồng thời log ra stdout để dễ xem trên Docker/Hugging Face
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(muc)
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
 
     return logger
 

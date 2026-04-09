@@ -352,6 +352,51 @@ def run_training(data_dir, model_path, classifier_type, fe_model, device_option,
     )
 
 
+def run_dataset_split(
+    data_dir,
+    train_ratio,
+    test_ratio,
+    val_ratio,
+    random_seed,
+    clear_existing_splits,
+):
+    """Chia dataset thành train/test/val từ giao diện Streamlit."""
+    try:
+        from src.split_data import chia_dataset
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from src.split_data import chia_dataset
+
+    return chia_dataset(
+        thu_muc_nguon=data_dir,
+        ty_le_train=train_ratio,
+        ty_le_test=test_ratio,
+        ty_le_val=val_ratio,
+        random_seed=random_seed,
+        xoa_split_cu=clear_existing_splits,
+        verbose=False,
+    )
+
+
+def lay_so_anh_se_dung_de_train(dataset_summary: dict) -> int:
+    """Xác định số ảnh thực tế sẽ được dùng khi train."""
+    if dataset_summary.get("has_split_dirs"):
+        return int(dataset_summary.get("split_counts", {}).get("train", 0) or 0)
+    return int(dataset_summary.get("root_images", 0) or 0)
+
+
+def lay_so_anh_co_the_dung_de_chia(dataset_summary: dict) -> int:
+    """Xác định số ảnh hiện có mà UI có thể dùng để chia/re-split dataset."""
+    so_anh_goc = int(dataset_summary.get("root_images", 0) or 0)
+    if so_anh_goc > 0:
+        return so_anh_goc
+
+    if dataset_summary.get("has_split_dirs"):
+        return int(sum((dataset_summary.get("split_counts") or {}).values()))
+
+    return 0
+
+
 def tao_anh_nhan_dien(image: Image.Image, predicted_display: str, confidence: float) -> BytesIO:
     """Tạo ảnh đã nhận diện với nhãn."""
     labeled = ve_nhan_len_anh(
@@ -1628,6 +1673,10 @@ if uploaded_files:
 with tab2:
     st.subheader("🧠 Huấn luyện model")
     st.markdown("Train model trực tiếp từ Streamlit.")
+    st.info(
+        "💡 Nếu thư mục dữ liệu đã có `train/test/val`, bước train sẽ chỉ dùng ảnh trong thư mục `train`. "
+        "Nếu chưa có split, hệ thống sẽ dùng ảnh gốc trực tiếp trong thư mục dữ liệu."
+    )
 
     with st.form("training_form"):
         c1, c2 = st.columns(2)
@@ -1644,6 +1693,35 @@ with tab2:
 
     dataset_summary = get_dataset_summary(data_dir)
     model_summary = get_model_summary(model_path)
+    so_anh_train_thuc_te = lay_so_anh_se_dung_de_train(dataset_summary)
+    so_anh_co_the_chia = lay_so_anh_co_the_dung_de_chia(dataset_summary)
+
+    if "dataset_split_result" in st.session_state:
+        split_result = st.session_state.dataset_split_result
+        st.success(
+            "✅ Đã chia dataset thành công | "
+            f"Train: {split_result.get('train', 0)} | "
+            f"Test: {split_result.get('test', 0)} | "
+            f"Val: {split_result.get('val', 0)}"
+        )
+        with st.expander("📋 Xem chi tiết lần chia dataset gần nhất"):
+            st.write(f"- Nguồn dữ liệu: {split_result.get('source_path', data_dir)}")
+            che_do_nguon = split_result.get("source_mode", "root")
+            if che_do_nguon == "split":
+                st.write("- Nguồn dùng để chia lại: ảnh hiện có trong train/test/val")
+            else:
+                st.write("- Nguồn dùng để chia: ảnh gốc trong thư mục root của dataset")
+            st.write(f"- Random seed: {split_result.get('random_seed', 42)}")
+            ti_le = split_result.get("ratios", {})
+            st.write(
+                "- Tỷ lệ: "
+                f"train={ti_le.get('train', 0):.2f}, "
+                f"test={ti_le.get('test', 0):.2f}, "
+                f"val={ti_le.get('val', 0):.2f}"
+            )
+            chi_tiet_lop = pd.DataFrame(split_result.get("class_details", []))
+            if not chi_tiet_lop.empty:
+                st.dataframe(chi_tiet_lop, width="stretch", hide_index=True)
 
     sc1, sc2 = st.columns(2)
     with sc1:
@@ -1669,12 +1747,114 @@ with tab2:
         else:
             st.info("Model sẽ được tạo mới sau khi train.")
 
-    if start_training:
-        total = dataset_summary["root_images"] + sum(dataset_summary["split_counts"].values())
+    if dataset_summary["has_split_dirs"]:
+        st.info(
+            f"📌 Đã phát hiện dataset split sẵn. Nếu train ngay, hệ thống sẽ dùng **{so_anh_train_thuc_te} ảnh** trong thư mục `train`."
+        )
+    else:
+        st.info(
+            f"📌 Chưa phát hiện `train/test/val`. Nếu train ngay, hệ thống sẽ dùng **{so_anh_train_thuc_te} ảnh gốc** trong thư mục dữ liệu."
+        )
+
+    st.markdown("### 🔀 Chia dataset train/test/val")
+    st.markdown(
+        "Dùng chức năng này để chia dữ liệu thành 3 tập `train`, `test`, `val` trước khi huấn luyện. "
+        "Nếu thư mục root không còn ảnh gốc nhưng đã có `train/test/val`, hệ thống sẽ gom ảnh từ các split hiện có để chia lại."
+    )
+
+    if so_anh_co_the_chia > 0:
+        if dataset_summary["root_images"] > 0:
+            st.info(
+                f"📦 Có **{so_anh_co_the_chia} ảnh gốc** trong thư mục root và có thể dùng để chia dataset."
+            )
+        elif dataset_summary["has_split_dirs"]:
+            st.info(
+                f"📦 Không còn ảnh gốc ở root, nhưng có thể dùng lại **{so_anh_co_the_chia} ảnh** từ train/test/val để chia lại."
+            )
+    else:
+        st.warning("⚠️ Chưa có ảnh hợp lệ để chia dataset.")
+
+    with st.form("split_dataset_form"):
+        sp1, sp2, sp3 = st.columns(3)
+        with sp1:
+            split_train_ratio = st.number_input(
+                "Tỷ lệ train",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.70,
+                step=0.05,
+                format="%.2f",
+            )
+            split_random_seed = st.number_input(
+                "Random seed",
+                min_value=0,
+                value=42,
+                step=1,
+            )
+        with sp2:
+            split_test_ratio = st.number_input(
+                "Tỷ lệ test",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.15,
+                step=0.05,
+                format="%.2f",
+            )
+            clear_existing_splits = st.checkbox(
+                "Xóa split cũ trước khi chia lại",
+                value=True,
+                help="Khuyến nghị bật để tránh dữ liệu train/test/val cũ còn sót lại.",
+            )
+        with sp3:
+            split_val_ratio = st.number_input(
+                "Tỷ lệ val",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.15,
+                step=0.05,
+                format="%.2f",
+            )
+            st.caption(
+                f"Tổng tỷ lệ hiện tại: {split_train_ratio + split_test_ratio + split_val_ratio:.2f}"
+            )
+
+        start_split = st.form_submit_button("🔀 Chia dataset", width="stretch")
+
+    if start_split:
+        tong_ty_le = split_train_ratio + split_test_ratio + split_val_ratio
         if not dataset_summary["exists"]:
             st.error("❌ Thư mục dataset không hợp lệ.")
-        elif total == 0:
-            st.error("❌ Không tìm thấy ảnh hợp lệ.")
+        elif so_anh_co_the_chia == 0:
+            st.error("❌ Không tìm thấy ảnh hợp lệ để chia hoặc chia lại dataset.")
+        elif abs(tong_ty_le - 1.0) >= 1e-6:
+            st.error("❌ Tổng tỷ lệ train/test/val phải bằng 1.0.")
+        else:
+            try:
+                with st.spinner("⏳ Đang chia dataset..."):
+                    split_result = run_dataset_split(
+                        data_dir=data_dir,
+                        train_ratio=float(split_train_ratio),
+                        test_ratio=float(split_test_ratio),
+                        val_ratio=float(split_val_ratio),
+                        random_seed=int(split_random_seed),
+                        clear_existing_splits=clear_existing_splits,
+                    )
+                st.session_state.dataset_split_result = split_result
+                scan_dataset.clear()
+                st.toast('✅ Đã chia dataset thành công!', icon='🎉')
+                import time; time.sleep(1.5) # Đợi 1.5s để bạn kịp nhìn thấy thông báo rồi mới tải lại trang
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Chia dataset thất bại: {str(e)}")
+
+    if start_training:
+        if not dataset_summary["exists"]:
+            st.error("❌ Thư mục dataset không hợp lệ.")
+        elif so_anh_train_thuc_te == 0:
+            if dataset_summary["has_split_dirs"]:
+                st.error("❌ Không có ảnh nào trong thư mục `train`. Hãy chia dataset trước hoặc kiểm tra lại split.")
+            else:
+                st.error("❌ Không tìm thấy ảnh hợp lệ để train.")
         else:
             with st.spinner("⏳ Đang train..."):
                 result = run_training(data_dir, model_path, classifier_type, fe_model, device_option, int(epochs))
