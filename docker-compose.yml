@@ -177,7 +177,7 @@ networks:
 # ========================================
 # PHẦN 3: ĐỊNH NGHĨA VOLUMES (TÙY CHỌN)
 # ========================================
-# Volumes giúp lưu dữ liệu持久化 (không mất khi container restart)
+# Volumes giúp lưu dữ liệu(không mất khi container restart)
 # Tuy nhiên, trong file này chúng ta dùng bind mount (./myenv/models)
 # nên không cần định nghĩa volumes ở đây
 
